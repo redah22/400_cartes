@@ -24,6 +24,8 @@ interface GameState {
   dealerIndex: number;
   currentPlayerIndex: number;
   currentTrick: { playerId: string; card: Card }[];
+  lastTrick: { playerId: string; card: Card }[];
+  lastTrickWinnerId: string | null;
   players: PlayerState[];
   myHand?: Card[];
 }
@@ -238,17 +240,13 @@ export function GameTable({ roomId }: { roomId: string }) {
 
           {/* Current Trick / Center */}
           <div className="trick-center">
-            {gameState.currentTrick.map((play, idx) => {
+            {(gameState.currentTrick.length > 0 ? gameState.currentTrick : (gameState.lastTrick || [])).map((play, idx) => {
               const p = gameState.players.find(p => p.id === play.playerId);
-              // Calculate relative position to 'me'
-              // me = 0, playedBy = 1 -> left (index diff = 1)
-              // me = 0, playedBy = 2 -> top (index diff = 2)
-              // me = 0, playedBy = 3 -> right (index diff = 3)
-              // me = 0, playedBy = 0 -> bottom (index diff = 0)
               const diff = (p!.index - me!.index + 4) % 4;
-              
+              const isLastTrick = gameState.currentTrick.length === 0;
+              const isWinner = isLastTrick && play.playerId === gameState.lastTrickWinnerId;
               return (
-                <div key={idx} className={`trick-slot trick-pos-${diff}`}>
+                <div key={idx} className={`trick-slot trick-pos-${diff} ${isLastTrick ? 'last-trick' : ''} ${isWinner ? 'trick-winner' : ''}`}>
                   {renderCard(play.card, false)}
                 </div>
               );

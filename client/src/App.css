@@ -493,3 +493,21 @@ body {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+/* Last completed trick (shown while waiting for next turn) */
+.trick-slot.last-trick {
+  opacity: 0.7;
+  filter: brightness(0.85);
+  transition: opacity 0.4s;
+}
+
+/* Winning card in last trick */
+.trick-slot.trick-winner {
+  opacity: 1;
+  filter: none;
+  z-index: 10 !important;
+}
+
+.trick-slot.trick-winner .playing-card {
+  box-shadow: 0 0 0 3px var(--primary), 0 8px 24px rgba(16, 185, 129, 0.5);
+}

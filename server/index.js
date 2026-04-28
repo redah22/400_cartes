@@ -127,6 +127,15 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('chat_message', ({ roomId, playerName, text }) => {
+    if (!text || !text.trim()) return;
+    io.to(roomId).emit('chat_message', {
+      playerName,
+      text: text.trim(),
+      timestamp: Date.now()
+    });
+  });
+
   socket.on('disconnect', () => {
     console.log(`User disconnected: ${socket.id}`);
     for (const [roomId, room] of rooms.entries()) {

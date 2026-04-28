@@ -32,6 +32,7 @@ export class GameEngine {
     this.dealerIndex = 0;
     this.currentPlayerIndex = 1; // starts right of dealer
     this.currentTrick = [];
+    this.lastTrick = []; // Keeps last completed trick visible
     this.trickLeaderIndex = null;
     this.tarneeb = 'hearts'; // Always hearts in 400
   }
@@ -186,56 +187,49 @@ export class GameEngine {
     const winner = this.players.find(p => p.id === winningPlay.playerId);
     winner.tricksWon++;
 
+    // Keep the completed trick visible before clearing
+    this.lastTrick = [...this.currentTrick];
+    this.lastTrickWinnerId = winningPlay.playerId;
     this.currentTrick = [];
     this.currentPlayerIndex = winner.index;
     this.trickLeaderIndex = winner.index;
 
     // Check end of round
     if (this.players[0].hand.length === 0) {
+      this.lastTrick = []; // Clear last trick at end of round
       this.calculateScores();
     }
   }
 
-  getBidScore(bid, won, currentScore) {
-    const pointsMapNormal = { 2: 2, 3: 3, 4: 4, 5: 10, 6: 12, 7: 14, 8: 16, 9: 27, 10: 40, 11: 40, 12: 40, 13: 40 };
-    const pointsMapHigh =   { 2: 2, 3: 3, 4: 4, 5: 5,  6: 6,  7: 14, 8: 16, 9: 27, 10: 40, 11: 40, 12: 40, 13: 40 };
-
-    const mapToUse = currentScore >= 30 ? pointsMapHigh : pointsMapNormal;
-    const points = mapToUse[bid];
-
-    if (won >= bid) {
-      return bid; // Based on rules, "only the number they bid is added to their score"
-      // Wait, is it the actual bid number, or the value in points?
-      // "If a player wins the number of Tricks they bid or more, only the number they bid is added to their score."
-      // Let's use the points from the table, as the table "illustrates the points assigned for each bid".
-      // E.g., bidding 5 and winning 5+ gives 10 points.
-    } else {
-      return -points;
-    }
+  getMultiplier(bid, scoreBeforeRound) {
+    // Multiplier only applies if score < 30 BEFORE the round
+    if (scoreBeforeRound >= 30) return 1;
+    if (bid >= 9) return 3;
+    if (bid >= 5) return 2;
+    return 1;
   }
 
   calculateScores() {
     for (let p of this.players) {
-      const pointsMapNormal = { 2: 2, 3: 3, 4: 4, 5: 10, 6: 12, 7: 14, 8: 16, 9: 27, 10: 40, 11: 40, 12: 40, 13: 40 };
-      const pointsMapHigh =   { 2: 2, 3: 3, 4: 4, 5: 5,  6: 6,  7: 14, 8: 16, 9: 27, 10: 40, 11: 40, 12: 40, 13: 40 };
-      const mapToUse = p.score >= 30 ? pointsMapHigh : pointsMapNormal;
-      const points = mapToUse[p.bid];
+      const scoreBeforeRound = p.score;
+      const multiplier = this.getMultiplier(p.bid, scoreBeforeRound);
+      const basePoints = p.bid; // Points = the bid number itself
 
       if (p.tricksWon >= p.bid) {
-        p.score += points;
+        p.score += basePoints * multiplier;
       } else {
-        p.score -= points;
+        p.score -= basePoints * multiplier;
       }
     }
 
-    // Check win condition
+    // Check win condition: one player >= 43 AND their teammate is positive
     const t0p1 = this.players[0];
     const t0p2 = this.players[2];
     const t1p1 = this.players[1];
     const t1p2 = this.players[3];
 
-    const team0Wins = (t0p1.score >= 41 && t0p2.score > 0) || (t0p2.score >= 41 && t0p1.score > 0);
-    const team1Wins = (t1p1.score >= 41 && t1p2.score > 0) || (t1p2.score >= 41 && t1p1.score > 0);
+    const team0Wins = (t0p1.score >= 43 && t0p2.score > 0) || (t0p2.score >= 43 && t0p1.score > 0);
+    const team1Wins = (t1p1.score >= 43 && t1p2.score > 0) || (t1p2.score >= 43 && t1p1.score > 0);
 
     if (team0Wins || team1Wins) {
       this.phase = 'game_over';
@@ -252,6 +246,8 @@ export class GameEngine {
       dealerIndex: this.dealerIndex,
       currentPlayerIndex: this.currentPlayerIndex,
       currentTrick: this.currentTrick,
+      lastTrick: this.lastTrick,
+      lastTrickWinnerId: this.lastTrickWinnerId,
       players: this.players.map(p => ({
         id: p.id,
         name: p.name,
