@@ -86,11 +86,29 @@ io.on('connection', (socket) => {
     console.log(`${playerName} (${socket.id}) joined room ${roomId}`);
 
     if (room.players.length === 4 && !room.gameState) {
-      room.gameState = new GameEngine(room.players);
-      room.gameState.startNewRound();
-      io.to(roomId).emit('game_started');
-      broadcastGameState(roomId);
+      // Instead of starting immediately, ask the first player to pick their teammate
+      io.to(roomId).emit('team_selection', { players: room.players, selectorId: room.players[0].id });
     }
+  });
+
+  socket.on('select_teammate', ({ roomId, selectorId, teammateId }) => {
+    const room = rooms.get(roomId);
+    if (!room || room.gameState) return;
+    if (room.players.length !== 4) return;
+
+    // Rearrange players: selector at 0, teammate at 2, others at 1 and 3
+    const selector = room.players.find(p => p.id === selectorId);
+    const teammate = room.players.find(p => p.id === teammateId);
+    const others = room.players.filter(p => p.id !== selectorId && p.id !== teammateId);
+
+    if (!selector || !teammate || others.length !== 2) return;
+
+    room.players = [selector, others[0], teammate, others[1]];
+
+    room.gameState = new GameEngine(room.players);
+    room.gameState.startNewRound();
+    io.to(roomId).emit('game_started');
+    broadcastGameState(roomId);
   });
 
   socket.on('request_state', ({ roomId }) => {

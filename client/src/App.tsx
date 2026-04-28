@@ -17,14 +17,16 @@ function App() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    function onConnect() {
-      // connected
-    }
+  // Team selection state
+  const [teamSelectionPlayers, setTeamSelectionPlayers] = useState<Player[]>([]);
+  const [selectorId, setSelectorId] = useState<string | null>(null);
 
+  useEffect(() => {
     function onDisconnect() {
       setInRoom(false);
       setGameStarted(false);
+      setTeamSelectionPlayers([]);
+      setSelectorId(null);
     }
 
     function onRoomUpdate({ players }: { players: Player[] }) {
@@ -37,21 +39,28 @@ function App() {
     }
 
     function onGameStarted() {
+      setTeamSelectionPlayers([]);
+      setSelectorId(null);
       setGameStarted(true);
     }
 
-    socket.on('connect', onConnect);
+    function onTeamSelection({ players, selectorId }: { players: Player[]; selectorId: string }) {
+      setTeamSelectionPlayers(players);
+      setSelectorId(selectorId);
+    }
+
     socket.on('disconnect', onDisconnect);
     socket.on('room_update', onRoomUpdate);
     socket.on('room_error', onRoomError);
     socket.on('game_started', onGameStarted);
+    socket.on('team_selection', onTeamSelection);
 
     return () => {
-      socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('room_update', onRoomUpdate);
       socket.off('room_error', onRoomError);
       socket.off('game_started', onGameStarted);
+      socket.off('team_selection', onTeamSelection);
     };
   }, []);
 
@@ -61,18 +70,64 @@ function App() {
       setError('Please enter both name and room code.');
       return;
     }
-    
     setError('');
     socket.connect();
     socket.emit('join_room', { roomId, playerName });
     setInRoom(true);
   };
 
+  const handleSelectTeammate = (teammateId: string) => {
+    socket.emit('select_teammate', { roomId, selectorId, teammateId });
+  };
+
   if (inRoom) {
     if (gameStarted) {
-      return <GameTable roomId={roomId} />;
+      return <GameTable roomId={roomId} playerName={playerName} />;
     }
 
+    // ── Team selection phase ──
+    if (teamSelectionPlayers.length === 4 && selectorId) {
+      const amISelector = socket.id === selectorId;
+      const selector = teamSelectionPlayers.find(p => p.id === selectorId);
+      const candidates = teamSelectionPlayers.filter(p => p.id !== selectorId);
+
+      return (
+        <div className="login-container">
+          <div className="login-box team-select-box">
+            <h1>Choose Your Teammate</h1>
+            {amISelector ? (
+              <>
+                <p className="team-select-subtitle">Pick the player you want on your team:</p>
+                <div className="teammate-list">
+                  {candidates.map(p => (
+                    <button
+                      key={p.id}
+                      className="teammate-btn"
+                      onClick={() => handleSelectTeammate(p.id)}
+                    >
+                      🤝 {p.name}
+                    </button>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <p className="team-select-subtitle">
+                Waiting for <strong>{selector?.name}</strong> to choose their teammate...
+              </p>
+            )}
+            <div className="player-chips">
+              {teamSelectionPlayers.map(p => (
+                <span key={p.id} className={`chip ${p.id === socket.id ? 'chip-me' : ''}`}>
+                  {p.name} {p.id === socket.id ? '(You)' : ''}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ── Lobby waiting ──
     return (
       <div className="game-container">
         <header className="game-header">
@@ -82,7 +137,6 @@ function App() {
             <span>{players.length} / 4 Players</span>
           </div>
         </header>
-
         <div className="lobby-wait">
           <h2>Waiting for players...</h2>
           <ul className="player-list">
